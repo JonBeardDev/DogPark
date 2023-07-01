@@ -1,0 +1,34 @@
+{
+  "name": "back-end",
+  "version": "1.0.0",
+  "description": "Back-end for Dog Park app",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "start:dev": "nodemon src/server.js",
+    "test": "npx cross-env LOG_LEVEL=warn jest --runInBand --detectOpenHandles --forceExit --config ./test/jest.config.js"
+  },
+  "author": "Jon Beard",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.0.1",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "knex": "^2.4.2",
+    "morgan": "^1.10.0",
+    "nanoid": "^4.0.2",
+    "npm-run-all": "^4.1.2",
+    "pg": "^8.11.1",
+    "pino": "^8.14.1",
+    "pino-http": "^8.3.3",
+    "pino-pretty": "^10.0.0"
+  },
+  "devDependencies": {
+    "jest": "^25.0.0",
+    "nodemon": "^1.14.9",
+    "supertest": "^6.1.1"
+  }
+}
