@@ -1,6 +1,8 @@
 const service = require("./users.service");
 const asyncErrorBoundary = require("../errors/asyncErrorBoundary");
 const bcrypt = require("bcrypt");
+const path = require("path");
+const fs = require("fs");
 
 const VALID_PROPERTIES = [
   "username",
@@ -389,6 +391,177 @@ async function updatePassword(req, res) {
   res.json({ data });
 }
 
+async function listFriends(req, res) {
+  const friends = await service.listFriends(res.locals.user.user_id);
+  res.json({ data: friends });
+}
+
+async function friendIdExists(req, res, next) {
+  const friend_id = req.params.friend_id;
+  const friend = await service.readID(friend_id);
+
+  if (friend) {
+    res.locals.friend_id = friend_id;
+    return next();
+  }
+
+  next({ status: 400, message: `User ID '${user_id} cannot be found.` });
+}
+
+async function notCurrentFriend(req, res, next) {
+  const friendStatus = await service.checkFriend(
+    res.locals.user.user_id,
+    res.locals.friend_id
+  );
+
+  if (friendStatus) {
+    return next({
+      status: 400,
+      message: "User is already on your friend list",
+    });
+  }
+
+  next();
+}
+
+async function addFriend(req, res) {
+  const newFriendship = await service.addFriend(
+    res.locals.user.user_id,
+    res.locals.friend_id
+  );
+  res.status(201).json({ data: newFriendship[0] });
+}
+
+async function currentFriend(req, res, next) {
+  const friendStatus = await service.checkFriend(
+    res.locals.user.user_id,
+    res.locals.friend_id
+  );
+
+  if (!friendStatus) {
+    return next({
+      status: 400,
+      message: "User is not on your friend list",
+    });
+  }
+
+  next();
+}
+
+async function removeFriend(req, res) {
+  await service.removeFriend(res.locals.user.user_id, res.locals.friend_id);
+  res.sendStatus(204);
+}
+
+async function search(req, res, next) {
+  const { username } = req.query;
+
+  if (username) {
+    res.json({ data: await service.listByUsername(username) });
+  } else {
+    next({
+      status: 400,
+      message: "Must include at least partial username in search.",
+    });
+  }
+}
+
+function fileIsImage(req, res, next) {
+  if (req.file) {
+    return next();
+  }
+
+  next({
+    status: 400,
+    message: "Invalid file type. Only image files are allowed.",
+  });
+}
+
+function noCurrentImage(req, res, next) {
+  const { profile_image } = res.locals.user;
+
+  if (profile_image) {
+    return next({
+      status: 400,
+      message:
+        "Profile image already exists. Use PUT method to update as needed.",
+    });
+  }
+
+  next();
+}
+
+async function addImage(req, res) {
+  const image = await service.addImage(req.file);
+  const userWithImage = await service.linkImage(
+    res.locals.user.user_id,
+    image.image_id
+  );
+  res.status(201).json({ data: userWithImage });
+}
+
+async function imageIdExists(req, res, next) {
+  const { profile_image } = res.locals.user;
+  const image = await service.readImage(profile_image);
+
+  if (image) {
+    res.locals.image = image;
+    return next();
+  }
+
+  next({ status: 404, message: `Image ID '${image_id} cannot be found.` });
+}
+
+function getImage(req, res) {
+  const { filename } = res.locals.image;
+  const dotIndex = filename.indexOf(".");
+  const fileType = filename.substring(dotIndex + 1);
+
+  res.setHeader("Content-Type", `image/${fileType}`);
+  res.sendFile(path.join(__dirname, res.locals.image.path));
+}
+
+async function removeImage(req, res) {
+  const { user_id } = res.locals.user;
+  const { image_id } = res.locals.image;
+  await service.removeImage(user_id, image_id);
+
+  const imagePath = path.join(__dirname, res.locals.image.path);
+  if (fs.existsSync(imagePath)) {
+    fs.unlink(imagePath, (err) => {
+      if (err) {
+        console.error("Error deleting file:", err);
+        res.status(500).send("Failed to delete image from server");
+      } else {
+        res.sendStatus(204);
+      }
+    });
+  } else {
+    res.status(404).send("Image not found.");
+  }
+}
+
+async function updateImage(req, res) {
+  const { image_id } = res.locals.image;
+
+  const data = await service.updateImage(image_id, req.file);
+  data = data[0];
+
+  const imagePath = path.join(__dirname, res.locals.image.path);
+  if (fs.existsSync(imagePath)) {
+    fs.unlink(imagePath, (err) => {
+      if (err) {
+        console.error("Error deleting file:", err);
+        res.status(500).send("Failed to delete image from server");
+      } else {
+        res.status(201).json({ data });
+      }
+    });
+  } else {
+    res.status(404).send("Image not found.");
+  }
+}
+
 module.exports = {
   create: [
     hasOnlyValidProperties,
@@ -429,5 +602,51 @@ module.exports = {
     asyncErrorBoundary(passwordCheck),
     asyncErrorBoundary(hashPassword),
     asyncErrorBoundary(updatePassword),
+  ],
+  listFriends: [
+    asyncErrorBoundary(userIdExists),
+    checkSessionMatch,
+    asyncErrorBoundary(listFriends),
+  ],
+  addFriend: [
+    asyncErrorBoundary(userIdExists),
+    asyncErrorBoundary(friendIdExists),
+    checkSessionMatch,
+    asyncErrorBoundary(notCurrentFriend),
+    asyncErrorBoundary(addFriend),
+  ],
+  removeFriend: [
+    asyncErrorBoundary(userIdExists),
+    asyncErrorBoundary(friendIdExists),
+    checkSessionMatch,
+    asyncErrorBoundary(currentFriend),
+    asyncErrorBoundary(removeFriend),
+  ],
+  search: [checkLoggedIn, asyncErrorBoundary(search)],
+  getImage: [
+    asyncErrorBoundary(userIdExists),
+    checkLoggedIn,
+    asyncErrorBoundary(imageIdExists),
+    getImage,
+  ],
+  addImage: [
+    asyncErrorBoundary(userIdExists),
+    checkSessionMatch,
+    fileIsImage,
+    noCurrentImage,
+    asyncErrorBoundary(addImage),
+  ],
+  updateImage: [
+    asyncErrorBoundary(userIdExists),
+    checkSessionMatch,
+    asyncErrorBoundary(imageIdExists),
+    fileIsImage,
+    asyncErrorBoundary(updateImage),
+  ],
+  removeImage: [
+    asyncErrorBoundary(userIdExists),
+    checkSessionMatch,
+    asyncErrorBoundary(imageIdExists),
+    asyncErrorBoundary(removeImage),
   ],
 };

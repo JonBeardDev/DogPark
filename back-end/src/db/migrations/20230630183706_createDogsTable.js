@@ -7,7 +7,7 @@ exports.up = function (knex) {
     table.increments("dog_id").primary();
     table.string("name").notNullable();
     table.string("primary_breed").notNullable();
-    table.boolean("mixed").notNullable();
+    table.boolean("mixed").notNullable().defaultTo(false);
     table.string("secondary_breed").defaultTo(null);
     table.string("age").notNullable();
     table.string("size").notNullable();
@@ -19,12 +19,6 @@ exports.up = function (knex) {
       .foreign("owner")
       .references("user_id")
       .inTable("users")
-      .onDelete("CASCADE");
-    table.integer("checked_in").unsigned().defaultTo(null);
-    table
-      .foreign("checked_in")
-      .references("park_id")
-      .inTable("parks")
       .onDelete("CASCADE");
     table.timestamps(true, true);
   });
