@@ -127,6 +127,10 @@ function checkSessionMatch(req, res, next) {
   next();
 }
 
+function read(req, res, next) {
+  res.json({ data: res.locals.dog });
+}
+
 async function update(req, res) {
   const updatedDog = { ...res.locals.dogData, dog_id: res.locals.dog.dog_id };
   const data = await service.update(updatedDog);
